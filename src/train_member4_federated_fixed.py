@@ -53,7 +53,17 @@ def load_and_preprocess_data():
     "diabetes_prediction_dataset.csv"
 )
     # ✅ Correct dataset path
-    DATA_PATH = os.path.join(os.path.dirname(__file__), "data", "data/diabetes_prediction_dataset.csv")
+   def load_and_preprocess_data():
+    DATA_PATH = os.path.join(
+        os.path.dirname(os.path.dirname(__file__)),
+        "data",
+        "diabetes_prediction_dataset.csv",
+    )
+
+    if not os.path.exists(DATA_PATH):
+        raise FileNotFoundError(f"Dataset not found at {DATA_PATH}")
+
+    df = pd.read_csv(DATA_PATH)
     
     if not os.path.exists(DATA_PATH):
         raise FileNotFoundError(f"Dataset not found at {DATA_PATH}")
