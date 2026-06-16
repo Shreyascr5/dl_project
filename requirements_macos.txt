@@ -1,0 +1,26 @@
+# TensorFlow and dependencies for macOS Apple Silicon (M1/M2/M3/M4)
+# Install with: pip install -r requirements_macos.txt
+
+# Core Deep Learning
+tensorflow-macos==2.14.0  # Official TensorFlow for Apple Silicon
+tensorflow-metal==1.1.0   # GPU acceleration (Metal Performance Shaders)
+
+# Data Processing
+pandas>=2.0.0
+numpy>=1.24.0
+scikit-learn>=1.3.0
+
+# Visualization
+matplotlib>=3.7.0
+seaborn>=0.12.0
+
+# Web App
+streamlit>=1.28.0
+
+# Image Processing
+Pillow>=10.0.0
+
+# Note: Do NOT install regular tensorflow - it won't work on Apple Silicon ARM64
+# If you need to downgrade/upgrade TensorFlow, uninstall all first:
+# pip uninstall tensorflow tensorflow-macos tensorflow-metal -y
+# Then reinstall this file
