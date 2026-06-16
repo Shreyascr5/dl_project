@@ -11,18 +11,20 @@ matplotlib.use("Agg")  # ✅ macOS fix
 import matplotlib.pyplot as plt
 
 # ==========================================================
-# APPLE SILICON OPTIMIZATION
+# APPLE SILICON OPTIMIZATION FOR 16GB RAM
 # ==========================================================
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+os.environ["TF_FORCE_GPU_ALLOW_GROWTH"] = "true"  # Prevent OOM
+os.environ["TENSORFLOW_ENABLE_ONEDNN_OPTS"] = "0"  # macOS compatibility
 
 import tensorflow as tf
 
 cpu_count = multiprocessing.cpu_count()
 
-# ✅ Use fewer threads to avoid deadlock
-tf.config.threading.set_inter_op_parallelism_threads(2)
-tf.config.threading.set_intra_op_parallelism_threads(cpu_count // 2)
+# ✅ CRITICAL: Reduced thread count for Apple Silicon M4
+tf.config.threading.set_inter_op_parallelism_threads(1)
+tf.config.threading.set_intra_op_parallelism_threads(2)
 
 # ✅ Reproducibility
 tf.random.set_seed(42)
@@ -296,6 +298,7 @@ def save_federated_metrics(global_accuracy_history, rounds):
 def main():
     print("\n" + "=" * 70)
     print("🚀 FEDERATED LEARNING SIMULATION - DIABETES PREDICTION")
+    print("🍎 OPTIMIZED FOR APPLE SILICON M4 (16GB RAM)")
     print("=" * 70)
 
     # ======================================================
@@ -305,13 +308,14 @@ def main():
     print("\n📂 Loading and preprocessing data...")
     X_train, X_test, y_train, y_test, class_weights = load_and_preprocess_data()
 
-    # Limit samples for federated simulation (optional)
-    MAX_FL_SAMPLES = min(20000, len(X_train))
+    # ✅ REDUCED for Apple Silicon: Cap at 8000 samples for low memory usage
+    MAX_FL_SAMPLES = min(8000, len(X_train))
     X_train = X_train[:MAX_FL_SAMPLES]
     y_train = y_train[:MAX_FL_SAMPLES]
 
     print(f"   Training samples: {len(X_train)}")
     print(f"   Test samples: {len(X_test)}")
+    print(f"   ⚠️  Reduced for 16GB MacBook Air M4 compatibility")
 
     # ======================================================
     # LOAD BEST MEMBER 4 MODEL
@@ -339,18 +343,20 @@ def main():
 
     # ======================================================
     # FEDERATED LEARNING CONFIGURATION
+    # ✅ OPTIMIZED FOR 16GB MacBook Air M4
     # ======================================================
 
-    ROUNDS = 10
-    LOCAL_EPOCHS = 2
-    CLIENTS_PER_ROUND = 4
-    BATCH_SIZE = 32  # ✅ reduced for stability
+    ROUNDS = 5  # ✅ REDUCED from 10 to 5
+    LOCAL_EPOCHS = 1  # ✅ REDUCED from 2 to 1
+    CLIENTS_PER_ROUND = 2  # ✅ REDUCED from 4 to 2 (sequential training)
+    BATCH_SIZE = 16  # ✅ REDUCED from 32 to 16
 
     print(f"\n⚙️  Federated Learning Configuration:")
     print(f"   Rounds: {ROUNDS}")
     print(f"   Clients per round: {CLIENTS_PER_ROUND}")
     print(f"   Local epochs: {LOCAL_EPOCHS}")
     print(f"   Batch size: {BATCH_SIZE}")
+    print(f"   ⚠️  Reduced for 16GB MacBook Air M4 compatibility")
 
     global_accuracy_history = []
     start_time = time.time()
@@ -379,25 +385,34 @@ def main():
             # Set current global weights
             global_model.set_weights(global_weights)
 
-            # Local training
-            history = global_model.fit(
-                X_client,
-                y_client,
-                epochs=LOCAL_EPOCHS,
-                batch_size=BATCH_SIZE,
-                verbose=0,
-                class_weight=class_weights,
-                shuffle=True,
-            )
+            # ✅ Local training with reduced verbosity
+            try:
+                history = global_model.fit(
+                    X_client,
+                    y_client,
+                    epochs=LOCAL_EPOCHS,
+                    batch_size=BATCH_SIZE,
+                    verbose=0,
+                    class_weight=class_weights,
+                    shuffle=True,
+                )
 
-            # Collect updated weights and dataset size
-            client_weights.append(global_model.get_weights())
-            client_sizes.append(len(X_client))
+                # Collect updated weights and dataset size
+                client_weights.append(global_model.get_weights())
+                client_sizes.append(len(X_client))
 
-            # Log training result
-            final_loss = history.history["loss"][-1]
-            final_acc = history.history["accuracy"][-1]
-            print(f"      └─ Local Loss: {final_loss:.4f}, Accuracy: {final_acc:.4f}")
+                # Log training result
+                final_loss = history.history["loss"][-1]
+                final_acc = history.history["accuracy"][-1]
+                print(f"      └─ Local Loss: {final_loss:.4f}, Accuracy: {final_acc:.4f}")
+            except Exception as e:
+                print(f"      ⚠️  Error training {hospital_name}: {str(e)}")
+                print(f"      └─ Skipping this client's update")
+                continue
+
+        if not client_weights:
+            print("⚠️  No clients trained successfully. Skipping aggregation.")
+            continue
 
         # --- FedAvg Aggregation Phase ---
         print("\n   🔄 Aggregating weights via FedAvg...")
@@ -406,10 +421,12 @@ def main():
         global_model.set_weights(global_weights)
 
         # --- Global Evaluation ---
-        loss, accuracy = global_model.evaluate(X_test_fed, y_test, verbose=0)
-        global_accuracy_history.append(accuracy)
-
-        print(f"   ✅ Global Model - Loss: {loss:.4f}, Accuracy: {accuracy:.4f}")
+        try:
+            loss, accuracy = global_model.evaluate(X_test_fed, y_test, verbose=0)
+            global_accuracy_history.append(accuracy)
+            print(f"   ✅ Global Model - Loss: {loss:.4f}, Accuracy: {accuracy:.4f}")
+        except Exception as e:
+            print(f"   ⚠️  Error evaluating model: {str(e)}")
 
     print("\n" + "=" * 70)
     print("🎯 FEDERATED TRAINING COMPLETED")
@@ -421,9 +438,13 @@ def main():
 
     total_training_time = time.time() - start_time
     federated_model_path = os.path.join(SAVE_DIR, "federated_global_model.keras")
-    global_model.save(federated_model_path)
-
-    print(f"\n💾 Federated global model saved: {federated_model_path}")
+    
+    try:
+        global_model.save(federated_model_path)
+        print(f"\n💾 Federated global model saved: {federated_model_path}")
+    except Exception as e:
+        print(f"\n⚠️  Error saving model: {str(e)}")
+        return
 
     # ======================================================
     # GENERATE OUTPUTS
@@ -432,19 +453,30 @@ def main():
     print("\n📊 Generating outputs...")
 
     # Save metrics
-    evaluate_and_save(
-        model_name="federated_global_model",
-        model=global_model,
-        X_test=X_test_fed,
-        y_test=y_test,
-        train_time=total_training_time,
-    )
+    try:
+        evaluate_and_save(
+            model_name="federated_global_model",
+            model=global_model,
+            X_test=X_test_fed,
+            y_test=y_test,
+            train_time=total_training_time,
+        )
+    except Exception as e:
+        print(f"⚠️  Error saving metrics: {str(e)}")
 
     # Save progression plot
-    save_federated_progression(global_accuracy_history, ROUNDS)
+    if global_accuracy_history:
+        try:
+            save_federated_progression(global_accuracy_history, len(global_accuracy_history))
+        except Exception as e:
+            print(f"⚠️  Error saving progression plot: {str(e)}")
 
     # Save federated results CSV
-    save_federated_metrics(global_accuracy_history, ROUNDS)
+    if global_accuracy_history:
+        try:
+            save_federated_metrics(global_accuracy_history, len(global_accuracy_history))
+        except Exception as e:
+            print(f"⚠️  Error saving federated metrics: {str(e)}")
 
     # ======================================================
     # SUMMARY
